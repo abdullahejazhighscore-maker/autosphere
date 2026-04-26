@@ -1,0 +1,426 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #f4f6fb;
+  color: #16202a;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.topbar nav a {
+  margin-left: 14px;
+  color: #1e3a8a;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.brand-logo {
+  height: 120px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(10, 31, 68, 0.08);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.narrow {
+  max-width: 420px;
+}
+
+.center-panel {
+  margin: 40px auto;
+}
+
+.grid-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.stack-form {
+  display: grid;
+  gap: 10px;
+}
+
+input, select,
+button,
+.button {
+  border: 1px solid #d5deee;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 14px;
+}
+
+button,
+.button {
+  background: #1e3a8a;
+  color: #fff;
+  border: none;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button.secondary {
+  background: #64748b;
+  display: inline-block;
+}
+
+.danger {
+  background: #b91c1c;
+}
+
+.search-input {
+  border: 2px solid #1e3a8a;
+  border-radius: 8px;
+}
+
+.car-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.home-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+}
+
+.sidebar {
+  align-self: start;
+  position: sticky;
+  top: 12px;
+}
+
+.car-card {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(10, 31, 68, 0.08);
+}
+
+.car-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.car-card-content {
+  padding: 12px;
+}
+
+.price {
+  color: #15803d;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.notice {
+  background: #ecfeff;
+  color: #155e75;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.error {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.car-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 0.8fr 0.7fr 1.6fr;
+  gap: 8px;
+  border-bottom: 1px solid #edf2f7;
+  padding: 8px 0;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+}
+
+.available-tag {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.sold-tag {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  padding: 8px;
+}
+
+.car-card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.gallery img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.details-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.main-image-container {
+  width: 100%;
+  height: 400px;
+  background: #0f172a;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.main-image-container img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.image-slider {
+  display: flex;
+  overflow-x: auto;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.image-slider img {
+  height: 80px;
+  min-width: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.image-slider img:hover {
+  border-color: #1e3a8a;
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.spec-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.spec-item span {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.spec-item strong {
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.seller-contact {
+  background: #e0f2fe;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+}
+
+.description-box {
+  margin: 20px 0;
+  line-height: 1.6;
+}
+
+/* Modal for Image Full View */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 100;
+  padding-top: 50px;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+.modal-content {
+  margin: auto;
+  display: block;
+  max-width: 90%;
+  max-height: 85vh;
+  object-fit: contain;
+}
+
+.close {
+  position: absolute;
+  top: 15px;
+  right: 35px;
+  color: #f1f1f1;
+  font-size: 40px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compare Cars Styles */
+.spec-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.spec-checkbox-card {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  padding: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.spec-checkbox-card:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.spec-checkbox-card input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.spec-checkbox-card label {
+  cursor: pointer;
+  font-weight: 500;
+  width: 100%;
+}
+
+.compare-table-wrapper {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.compare-table th, .compare-table td {
+  padding: 12px 16px;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+}
+
+.compare-table th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 16px;
+  width: 25%;
+}
+
+.compare-table .feature-col {
+  text-align: left;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  width: 20%;
+}
+
+.compare-table .group-header td {
+  background: #e2e8f0;
+  font-weight: bold;
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 15px;
+  color: #334155;
+  border-top: 2px solid #cbd5e1;
+}
+
+.compare-table tr:hover td:not(.feature-col):not(.group-header td) {
+  background: #f8fafc;
+}
+
+.price-cell {
+  font-weight: 700;
+  color: #15803d;
+}
+
