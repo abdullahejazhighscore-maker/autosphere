@@ -170,7 +170,8 @@ public final class Database {
             "ALTER TABLE cars ADD COLUMN fuel_type TEXT",
             "ALTER TABLE cars ADD COLUMN assembly TEXT",
             "ALTER TABLE cars ADD COLUMN paint_condition TEXT",
-            "ALTER TABLE cars ADD COLUMN showered_parts TEXT"
+            "ALTER TABLE cars ADD COLUMN showered_parts TEXT",
+            "ALTER TABLE cars ADD COLUMN body TEXT"
         };
         for (String colSql : columns) {
             try {

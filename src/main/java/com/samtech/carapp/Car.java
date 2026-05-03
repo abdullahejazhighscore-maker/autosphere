@@ -21,6 +21,7 @@ public class Car {
     private final String assembly;
     private final String paintCondition;
     private final String showeredParts;
+    private final String body;
 
     public Car(
             int id,
@@ -42,7 +43,8 @@ public class Car {
             String fuelType,
             String assembly,
             String paintCondition,
-            String showeredParts
+            String showeredParts,
+            String body
     ) {
         this.id = id;
         this.title = title;
@@ -64,6 +66,11 @@ public class Car {
         this.assembly = assembly;
         this.paintCondition = paintCondition;
         this.showeredParts = showeredParts;
+        this.body = body;
+    }
+
+    public String getBody() {
+        return body;
     }
 
     public int getId() {

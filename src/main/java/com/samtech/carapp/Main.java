@@ -9,17 +9,23 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Year;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 public class Main {
     private static final String ROLE_SELLER = "SELLER";
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_BUYER = "BUYER";
+
+    private static final Pattern PK_PHONE = Pattern.compile("^(\\+92|0)?3\\d{9}$");
+    private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     public static void main(String[] args) {
         Database.initialize();
@@ -38,25 +44,76 @@ public class Main {
             filters.put("type", queryParamOrEmpty(ctx, "type"));
             filters.put("search", queryParamOrEmpty(ctx, "search"));
             filters.put("make", queryParamOrEmpty(ctx, "make"));
-            filters.put("model", queryParamOrEmpty(ctx, "model"));
+            filters.put("model", joinModelParams(ctx));
+            filters.put("body", queryParamOrEmpty(ctx, "body"));
+            filters.put("condition", queryParamOrEmpty(ctx, "condition"));
+            filters.put("transmission", queryParamOrEmpty(ctx, "transmission"));
             filters.put("color", queryParamOrEmpty(ctx, "color"));
             filters.put("city", queryParamOrEmpty(ctx, "city"));
             filters.put("minMileage", queryParamOrEmpty(ctx, "minMileage"));
             filters.put("maxMileage", queryParamOrEmpty(ctx, "maxMileage"));
+            filters.put("minYear", queryParamOrEmpty(ctx, "minYear"));
+            filters.put("maxYear", queryParamOrEmpty(ctx, "maxYear"));
             filters.put("minPrice", queryParamOrEmpty(ctx, "minPrice"));
             filters.put("maxPrice", queryParamOrEmpty(ctx, "maxPrice"));
             filters.put("status", queryParamOrEmpty(ctx, "status"));
+            filters.put("showAllBrands", queryParamOrEmpty(ctx, "showAllBrands"));
+            filters.put("showAllModels", queryParamOrEmpty(ctx, "showAllModels"));
+            filters.put("usage", queryParamOrEmpty(ctx, "usage"));
 
             List<Car> cars = carRepository.findAllWithFilters(filters);
             String message = queryParamOrEmpty(ctx, "msg");
             User viewer = getCurrentUser(ctx);
-            Set<Integer> favoriteIds = new HashSet<>();
-            if (viewer != null && ROLE_BUYER.equals(viewer.getRole())) {
-                for (Car c : carRepository.findFavoritesByUserId(viewer.getId())) {
-                    favoriteIds.add(c.getId());
-                }
-            }
+            Set<Integer> favoriteIds = collectFavoriteIds(ctx, viewer, carRepository);
             ctx.html(HtmlRenderer.homePage(cars, filters, viewer, favoriteIds, message));
+        });
+
+        app.get("/favorites", ctx -> {
+            User viewer = getCurrentUser(ctx);
+            List<Car> favorites;
+            if (viewer != null && ROLE_BUYER.equals(viewer.getRole())) {
+                favorites = carRepository.findFavoritesByUserId(viewer.getId());
+            } else {
+                Set<Integer> guestFavs = getGuestFavorites(ctx);
+                favorites = guestFavs.isEmpty() ? new ArrayList<>() : carRepository.findByIds(new ArrayList<>(guestFavs));
+            }
+            Set<Integer> favoriteIds = new HashSet<>();
+            for (Car c : favorites) favoriteIds.add(c.getId());
+            ctx.html(HtmlRenderer.favoritesPage(viewer, favorites, favoriteIds, queryParamOrEmpty(ctx, "msg")));
+        });
+
+        app.post("/favorites/{id}/toggle", ctx -> {
+            int carId;
+            try { carId = Integer.parseInt(ctx.pathParam("id")); }
+            catch (NumberFormatException e) { ctx.redirect("/"); return; }
+
+            User viewer = getCurrentUser(ctx);
+            if (viewer != null && ROLE_BUYER.equals(viewer.getRole())) {
+                if (carRepository.isFavorite(viewer.getId(), carId)) {
+                    carRepository.removeFavorite(viewer.getId(), carId);
+                } else {
+                    carRepository.addFavorite(viewer.getId(), carId);
+                }
+            } else {
+                Set<Integer> favs = getGuestFavorites(ctx);
+                if (favs.contains(carId)) favs.remove(carId);
+                else favs.add(carId);
+                ctx.sessionAttribute("guestFavorites", favs);
+            }
+
+            String returnTo = ctx.formParam("returnTo");
+            if (returnTo == null || returnTo.isBlank()) returnTo = ctx.header("Referer");
+            if (returnTo == null || returnTo.isBlank()) returnTo = "/";
+            ctx.redirect(returnTo);
+        });
+
+        app.get("/profile", ctx -> {
+            User viewer = getCurrentUser(ctx);
+            if (viewer != null) {
+                viewer = userRepository.findById(viewer.getId());
+            }
+            int favCount = collectFavoriteIds(ctx, viewer, carRepository).size();
+            ctx.html(HtmlRenderer.profilePage(viewer, favCount));
         });
 
         app.get("/cars/{id}", ctx -> {
@@ -67,15 +124,7 @@ public class Main {
                 return;
             }
             User viewer = getCurrentUser(ctx);
-            boolean isFavorite = false;
-            if (viewer != null && ROLE_BUYER.equals(viewer.getRole())) {
-                for (Car fav : carRepository.findFavoritesByUserId(viewer.getId())) {
-                    if (fav.getId() == carId) {
-                        isFavorite = true;
-                        break;
-                    }
-                }
-            }
+            boolean isFavorite = collectFavoriteIds(ctx, viewer, carRepository).contains(carId);
             ctx.html(HtmlRenderer.carDetailsPage(details, viewer, isFavorite, queryParamOrEmpty(ctx, "msg")));
         });
 
@@ -213,6 +262,14 @@ public class Main {
             String password = required(ctx.formParam("password"));
             String email = required(ctx.formParam("email"));
             String phone = required(ctx.formParam("phone"));
+            if (!EMAIL.matcher(email).matches()) {
+                ctx.redirect("/seller/signup?error=Please+enter+a+valid+email+address");
+                return;
+            }
+            if (!PK_PHONE.matcher(phone.replaceAll("[\\s-]", "")).matches()) {
+                ctx.redirect("/seller/signup?error=Enter+a+valid+Pakistani+mobile+number+(e.g.+03001234567)");
+                return;
+            }
             if (userRepository.usernameExists(username)) {
                 ctx.redirect("/seller/signup?error=Username+already+taken");
                 return;
@@ -253,6 +310,19 @@ public class Main {
                 return;
             }
 
+            int year;
+            try {
+                year = Integer.parseInt(required(ctx.formParam("year")));
+            } catch (NumberFormatException ex) {
+                ctx.redirect("/seller/dashboard?msg=Year+must+be+a+number");
+                return;
+            }
+            int currentYear = Year.now().getValue();
+            if (year < 1900 || year > currentYear) {
+                ctx.redirect("/seller/dashboard?msg=Year+must+be+between+1900+and+" + currentYear);
+                return;
+            }
+
             List<String> imagePaths = saveUploadedImages(images);
             carRepository.insert(
                     required(ctx.formParam("title")),
@@ -260,7 +330,7 @@ public class Main {
                     required(ctx.formParam("model")),
                     required(ctx.formParam("color")),
                     required(ctx.formParam("city")),
-                    Integer.parseInt(required(ctx.formParam("year"))),
+                    year,
                     Double.parseDouble(required(ctx.formParam("price"))),
                     Integer.parseInt(required(ctx.formParam("mileage"))),
                     required(ctx.formParam("description")),
@@ -272,7 +342,8 @@ public class Main {
                     formParamOrEmpty(ctx, "fuelType"),
                     formParamOrEmpty(ctx, "assembly"),
                     formParamOrEmpty(ctx, "paintCondition"),
-                    formParamOrEmpty(ctx, "showeredParts")
+                    formParamOrEmpty(ctx, "showeredParts"),
+                    formParamOrEmpty(ctx, "body")
             );
             ctx.redirect("/seller/dashboard?msg=Car+added+successfully");
         });
@@ -298,6 +369,18 @@ public class Main {
                 return;
             }
             int carId = Integer.parseInt(ctx.pathParam("id"));
+            int year;
+            try {
+                year = Integer.parseInt(required(ctx.formParam("year")));
+            } catch (NumberFormatException ex) {
+                ctx.redirect("/seller/cars/" + carId + "/edit?error=Year+must+be+a+number");
+                return;
+            }
+            int currentYear = Year.now().getValue();
+            if (year < 1900 || year > currentYear) {
+                ctx.redirect("/seller/cars/" + carId + "/edit?error=Year+must+be+between+1900+and+" + currentYear);
+                return;
+            }
             carRepository.updateCarForSeller(
                     carId,
                     seller.getId(),
@@ -306,7 +389,7 @@ public class Main {
                     required(ctx.formParam("model")),
                     required(ctx.formParam("color")),
                     required(ctx.formParam("city")),
-                    Integer.parseInt(required(ctx.formParam("year"))),
+                    year,
                     Double.parseDouble(required(ctx.formParam("price"))),
                     Integer.parseInt(required(ctx.formParam("mileage"))),
                     required(ctx.formParam("description")),
@@ -315,7 +398,8 @@ public class Main {
                     formParamOrEmpty(ctx, "fuelType"),
                     formParamOrEmpty(ctx, "assembly"),
                     formParamOrEmpty(ctx, "paintCondition"),
-                    formParamOrEmpty(ctx, "showeredParts")
+                    formParamOrEmpty(ctx, "showeredParts"),
+                    formParamOrEmpty(ctx, "body")
             );
             List<UploadedFile> images = ctx.uploadedFiles("images");
             if (!images.isEmpty()) {
@@ -488,5 +572,42 @@ public class Main {
         ctx.sessionAttribute("userId", null);
         ctx.sessionAttribute("username", null);
         ctx.sessionAttribute("role", null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<Integer> getGuestFavorites(io.javalin.http.Context ctx) {
+        Set<Integer> favs = ctx.sessionAttribute("guestFavorites");
+        if (favs == null) {
+            favs = new HashSet<>();
+            ctx.sessionAttribute("guestFavorites", favs);
+        }
+        return favs;
+    }
+
+    private static Set<Integer> collectFavoriteIds(io.javalin.http.Context ctx, User viewer, CarRepository carRepository) {
+        Set<Integer> favoriteIds = new HashSet<>();
+        if (viewer != null && ROLE_BUYER.equals(viewer.getRole())) {
+            for (Car c : carRepository.findFavoritesByUserId(viewer.getId())) {
+                favoriteIds.add(c.getId());
+            }
+        } else {
+            Set<Integer> guest = ctx.sessionAttribute("guestFavorites");
+            if (guest != null) favoriteIds.addAll(guest);
+        }
+        return favoriteIds;
+    }
+
+    private static String joinModelParams(io.javalin.http.Context ctx) {
+        List<String> values = ctx.queryParams("model");
+        if (values == null || values.isEmpty()) return "";
+        Set<String> dedup = new java.util.LinkedHashSet<>();
+        for (String raw : values) {
+            if (raw == null) continue;
+            for (String part : raw.split(",")) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) dedup.add(trimmed);
+            }
+        }
+        return String.join(",", dedup);
     }
 }
