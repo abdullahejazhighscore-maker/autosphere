@@ -156,7 +156,7 @@ public final class HtmlRenderer {
             cards.append(COMPACT_VIEW.render(car, favoriteCarIds.contains(car.getId()), logoUrl));
         }
         if (cars.isEmpty()) {
-            cards.append("<div class='panel' style='grid-column: 1 / -1; text-align:center; color:#64748b;'>No cars match the current filters.</div>");
+            cards.append("<div class='panel' style='grid-column: 1 / -1; text-align:center;'>No cars match the current filters.</div>");
         }
 
         String messageBox = message == null || message.isBlank() ? "" : "<div class='notice success'>" + escape(message) + "</div>";
@@ -177,7 +177,17 @@ public final class HtmlRenderer {
         boolean showAllBrands = "1".equals(filters.getOrDefault("showAllBrands", ""));
         boolean showAllModels = "1".equals(filters.getOrDefault("showAllModels", ""));
 
-        String activeChips = renderActiveFilterChips(filters);
+        // Hero is shown only when the user is on the un-filtered home page
+        boolean anyFilter = !search.isBlank() || !selectedMake.isBlank() || !selectedModelsCsv.isBlank()
+                || !selectedBody.isBlank() || !selectedCondition.isBlank() || !selectedTransmission.isBlank()
+                || !selectedType.isBlank() || !minPrice.isBlank() || !maxPrice.isBlank()
+                || !minYearStr.isBlank() || !maxYearStr.isBlank()
+                || !filters.getOrDefault("usage", "").isBlank();
+        String heroSection = anyFilter ? "" : renderHero();
+
+        String activeChips = anyFilter ? renderActiveFilterChips(filters) : "";
+        String brandPillsRow = renderBrandPillsRow(filters, selectedMake);
+        String quickFiltersRow = renderQuickFilters(filters);
         String brandGrid = renderBrandGrid(filters, selectedMake, showAllBrands);
         String modelGrid = renderModelGrid(filters, selectedMake, selectedModels, showAllModels);
         String bodyGrid = renderBodyGrid(filters, selectedBody);
@@ -198,17 +208,19 @@ public final class HtmlRenderer {
                 escape(selectedTransmission)
         );
 
+        String headingText = anyFilter ? "Cars for sale" : "Latest Listings";
         String resultsCount = cars.size() + " result" + (cars.size() == 1 ? "" : "s");
-        String breadcrumb = "<div class='breadcrumb'><a href='/'>Home</a> <span>›</span> <span>Cars for sale</span></div>";
 
-        return layout("Autosphere - Buy Cars in Pakistan", """
+        return layout("AutoSphere — Buy Cars in Pakistan", """
                 %s
                 %s
                 %s
-                <div class="results-header">
-                    <h1>Cars for sale</h1>
-                    <span class="results-count">(%s)</span>
+                %s
+                <div class="results-header-row">
+                    <h2>%s <span class="count">%s</span></h2>
+                    <a href="/" class="view-all">View all →</a>
                 </div>
+                %s
                 %s
                 <section class="home-layout">
                     <aside class="sidebar">
@@ -216,27 +228,26 @@ public final class HtmlRenderer {
                         <form method="get" action="/" id="filterForm">
                             %s
                             <div class="sidebar-search">
-                                <input type="text" name="search" placeholder="Search" value="%s"/>
+                                <input type="text" name="search" placeholder="🔎 Keyword search…" value="%s"/>
                             </div>
 
-                            <h3>Make</h3>
-                            <div class="brand-grid">%s</div>
-                            %s
+                            <h3>Budget (Rs)</h3>
+                            <div class="range-row">
+                                <input type="number" name="minPrice" placeholder="Min" value="%s" step="50000"/>
+                                <input type="number" name="maxPrice" placeholder="Max" value="%s" step="50000"/>
+                            </div>
 
-                            <h3>Model</h3>
+                            <h3>Model search</h3>
                             <div class="sidebar-search">
                                 <input type="text" id="modelSearch" placeholder="Search models" oninput="filterModelList(this.value)"/>
                             </div>
                             <div class="model-grid" id="modelGrid">%s</div>
                             %s
 
-                            <h3>Body</h3>
+                            <h3>Body type</h3>
                             <div class="body-grid">%s</div>
 
-                            <h3>Condition</h3>
-                            <div class="pill-row">%s</div>
-
-                            <h3>Year</h3>
+                            <h3>Year range</h3>
                             <div class="range-row">
                                 <select name="minYear">%s</select>
                                 <select name="maxYear">%s</select>
@@ -245,19 +256,25 @@ public final class HtmlRenderer {
                             <h3>Transmission</h3>
                             <div class="pill-row">%s</div>
 
-                            <h3>Price (Rs)</h3>
-                            <div class="range-row">
-                                <input type="number" name="minPrice" placeholder="Min" value="%s" step="50000"/>
-                                <input type="number" name="maxPrice" placeholder="Max" value="%s" step="50000"/>
-                            </div>
+                            <h3>Condition</h3>
+                            <div class="pill-row">%s</div>
 
                             <div class="sidebar-actions">
-                                <button type="submit" class="button-primary">Apply filters</button>
+                                <button type="submit" class="button-primary">Apply Filters</button>
                                 <a class="button-ghost" href="/">Reset filters</a>
                             </div>
                         </form>
                     </aside>
                     <section>
+                        <div class="sort-bar">
+                            <span class="results-text"><strong>%s</strong> %s found matching your search</span>
+                            <select onchange="this.form && this.form.submit()">
+                                <option>Sort: Newest First</option>
+                                <option>Sort: Price ↓</option>
+                                <option>Sort: Price ↑</option>
+                                <option>Sort: Mileage ↑</option>
+                            </select>
+                        </div>
                         <section class="car-grid">%s</section>
                     </section>
                 </section>
@@ -274,25 +291,108 @@ public final class HtmlRenderer {
                 """.formatted(
                 topbar,
                 messageBox,
-                breadcrumb,
+                heroSection,
+                brandPillsRow,
+                escape(headingText),
                 resultsCount,
                 activeChips,
+                quickFiltersRow,
                 hiddenFields,
                 escape(search),
-                brandGrid,
-                renderShowAllToggle(filters, "showAllBrands", showAllBrands, BRAND_LOGOS.size()),
+                escape(minPrice),
+                escape(maxPrice),
                 modelGrid,
                 renderModelShowAllToggle(filters, selectedMake, showAllModels),
                 bodyGrid,
-                conditionPills,
                 renderYearOptions(brandMinYear(selectedMake), MAX_YEAR, minYearStr, brandMinYear(selectedMake)),
                 renderYearOptions(brandMinYear(selectedMake), MAX_YEAR, maxYearStr, MAX_YEAR),
                 transmissionPills,
-                escape(minPrice),
-                escape(maxPrice),
+                conditionPills,
+                cars.size(),
+                cars.size() == 1 ? "car" : "cars",
                 cards,
                 renderWelcomeWizard(filters)
         ));
+    }
+
+    /** Top hero section with title, search bar, stats and the editor's-pick visual. */
+    private static String renderHero() {
+        return """
+                <section class="hero">
+                    <div class="hero-left">
+                        <span class="hero-pill">★ Pakistan's #1 Car Marketplace</span>
+                        <h1>Find Your <span class="accent">Perfect Drive.</span></h1>
+                        <p class="hero-sub">Browse thousands of verified listings across Pakistan. From budget hatchbacks to luxury sedans — your next car is one search away.</p>
+                        <form class="hero-search" method="get" action="/">
+                            <span class="search-icon">🔎</span>
+                            <input type="text" name="search" placeholder="Search by make, model, or city…"/>
+                            <button type="submit">Search Cars</button>
+                        </form>
+                        <div class="hero-stats">
+                            <div><strong>12,400+</strong><span>Active Listings</span></div>
+                            <div><strong>8 Cities</strong><span>Across Pakistan</span></div>
+                            <div><strong>98%</strong><span>Verified Sellers</span></div>
+                        </div>
+                    </div>
+                    <div class="hero-right">
+                        <span class="hero-tag-editor">★ Editor's Pick</span>
+                        <span class="hero-glow"></span>
+                        <div class="hero-car">🚗</div>
+                        <div class="hero-tag-price">
+                            <small>Starting from</small>
+                            <strong>Rs 3,000,000</strong>
+                        </div>
+                    </div>
+                </section>
+                """;
+    }
+
+    /** Horizontal "Browse by Make" pill row visible directly under the hero. */
+    private static String renderBrandPillsRow(Map<String, String> filters, String selectedMake) {
+        String[] brands = { "Suzuki", "Toyota", "Honda", "Hyundai", "KIA", "Changan", "MG", "Nissan" };
+        StringBuilder sb = new StringBuilder("<div class='brand-row'><span class='brand-row-label'>Browse by make</span>");
+        for (String brand : brands) {
+            boolean active = brand.equalsIgnoreCase(selectedMake);
+            String url = active
+                    ? buildUrl(filters, "make", "", "model", "")
+                    : buildUrl(filters, "make", brand, "model", "", "showAllModels", "");
+            sb.append("<a class='brand-pill ").append(active ? "active" : "").append("' href='")
+                    .append(escape(url)).append("'>").append(escape(brand)).append("</a>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    /** Yellow quick-filter pills above the listings (All Cars / Under 5M / 2020+ / Sedan / SUV / etc.) */
+    private static String renderQuickFilters(Map<String, String> filters) {
+        StringBuilder sb = new StringBuilder("<div class='quick-filters'>");
+        // "All Cars" — no filters
+        boolean anyActive = !filters.getOrDefault("body", "").isBlank()
+                || !filters.getOrDefault("maxPrice", "").isBlank()
+                || !filters.getOrDefault("minYear", "").isBlank();
+        sb.append("<a class='qf-pill ").append(anyActive ? "" : "active").append("' href='/'>All Cars</a>");
+
+        // Under Rs 5M
+        boolean under5m = "5000000".equals(filters.getOrDefault("maxPrice", ""));
+        sb.append("<a class='qf-pill ").append(under5m ? "active" : "")
+                .append("' href='").append(escape(buildUrl(filters, "maxPrice", under5m ? "" : "5000000")))
+                .append("'>Under Rs 5M</a>");
+
+        // 2020+
+        boolean year2020 = "2020".equals(filters.getOrDefault("minYear", ""));
+        sb.append("<a class='qf-pill ").append(year2020 ? "active" : "")
+                .append("' href='").append(escape(buildUrl(filters, "minYear", year2020 ? "" : "2020")))
+                .append("'>2020+</a>");
+
+        // Body shortcuts
+        for (String body : new String[]{"Sedan", "Hatchback", "SUV", "Sport Car"}) {
+            boolean active = body.equalsIgnoreCase(filters.getOrDefault("body", ""));
+            sb.append("<a class='qf-pill ").append(active ? "active" : "")
+                    .append("' href='").append(escape(buildUrl(filters, "body", active ? "" : body)))
+                    .append("'>").append(escape(body)).append("</a>");
+        }
+        sb.append("</div>");
+        return sb.toString();
     }
 
     /**
@@ -317,11 +417,11 @@ public final class HtmlRenderer {
 
                         <div class="wizard-step" data-step="0">
                             <div class="wizard-icon">🚗</div>
-                            <h2>Welcome to Autosphere</h2>
-                            <p class="wizard-sub">Do you want help choosing a car?</p>
+                            <h2>Do you want help choosing a car?</h2>
+                            <p class="wizard-sub">Quick questions — we'll filter listings to suit you.</p>
                             <div class="wizard-actions">
-                                <button type="button" class="wizard-btn wizard-btn-primary" onclick="goToStep(1)">Yes, help me</button>
-                                <button type="button" class="wizard-btn wizard-btn-ghost" onclick="closeWizard()">No, thanks</button>
+                                <button type="button" class="wizard-btn wizard-btn-primary" onclick="goToStep(1)">Yes</button>
+                                <button type="button" class="wizard-btn wizard-btn-secondary-fill" onclick="closeWizard()">No</button>
                             </div>
                             <div class="wizard-progress" aria-hidden="true">
                                 <span class="dot active"></span>
@@ -332,8 +432,8 @@ public final class HtmlRenderer {
                         </div>
 
                         <div class="wizard-step" data-step="1">
-                            <h2>Which segment are you looking for?</h2>
-                            <p class="wizard-sub">Pick the body type that matches your needs.</p>
+                            <h2>Which car segment are you looking for?</h2>
+                            <p class="wizard-sub">Choose SUVs, sedans, hatchbacks, or other segments.</p>
                             <div class="wizard-grid wizard-segment-grid" id="wizSegments">
                                 <button type="button" data-value="SUV">🚙<span>SUV</span></button>
                                 <button type="button" data-value="Sedan">🚗<span>Sedan</span></button>
@@ -352,8 +452,8 @@ public final class HtmlRenderer {
                         </div>
 
                         <div class="wizard-step" data-step="2">
-                            <h2>Family or personal use?</h2>
-                            <p class="wizard-sub">This helps us tune the recommendations.</p>
+                            <h2>Are you looking for a family car or for personal use?</h2>
+                            <p class="wizard-sub">Tap the option that best describes how you'll use it.</p>
                             <div class="wizard-grid wizard-usage-grid" id="wizUsage">
                                 <button type="button" data-value="Family">
                                     <div class="usage-emoji">👨‍👩‍👧</div>
@@ -421,6 +521,11 @@ public final class HtmlRenderer {
                             overlay.querySelectorAll('.wizard-step').forEach(function(el) {
                                 var on = String(idx) === el.getAttribute('data-step');
                                 el.classList.toggle('active', on);
+                                if (on) {
+                                    el.style.animation = 'none';
+                                    void el.offsetWidth;
+                                    el.style.animation = '';
+                                }
                             });
                         };
                         window.finishWizard = function() {
@@ -485,15 +590,17 @@ public final class HtmlRenderer {
         String profileBlock;
         if (viewer == null) {
             profileBlock = """
-                    <a href='/auth/login' class='cta-button'>Sign In</a>
-                    <a href='/auth/signup'>Sign Up</a>
+                    <a href='/auth/login' class='btn-outline'>Sign In</a>
+                    <a href='/seller/login' class='btn-primary'>List Your Car</a>
                     """;
         } else {
             String letter = viewer.getUsername().substring(0, 1).toUpperCase();
             String roleLabel = capitalize(viewer.getRole().toLowerCase());
             String email = viewer.getEmail() == null || viewer.getEmail().isBlank() ? "—" : viewer.getEmail();
             String phone = viewer.getPhone() == null || viewer.getPhone().isBlank() ? "—" : viewer.getPhone();
+            String listCarHref = "SELLER".equalsIgnoreCase(viewer.getRole()) ? "/seller/" + viewer.getUsername() : "/seller/login";
             profileBlock = """
+                    <a href='%s' class='btn-primary'>List Your Car</a>
                     <div class='profile-dropdown' tabindex='0'>
                         <a class='profile-chip' href='/profile'>
                             <span class='avatar'>%s</span>
@@ -510,6 +617,7 @@ public final class HtmlRenderer {
                         </div>
                     </div>
                     """.formatted(
+                    listCarHref,
                     escape(letter),
                     escape(viewer.getUsername()),
                     escape(viewer.getUsername()),
@@ -520,25 +628,25 @@ public final class HtmlRenderer {
             );
         }
 
-        String adminQuickLink = (viewer == null)
-                ? "<a href='/admin/login' class='admin-link'>Admin</a>"
-                : "";
         return """
                 <header class="topbar">
-                    <a href="/" style="text-decoration:none;"><img src="/logo.png" alt="Autosphere" class="brand-logo"/></a>
+                    <a href="/" class="brand">
+                        <span class="brand-mark">A</span>
+                        <span>AutoSphere</span>
+                    </a>
                     <nav>
-                        <a href="/">Home</a>
+                        <a href="/" class="active">Home</a>
                         <a href="/?type=Car">Inventory</a>
                         <a href="/?type=Bike">Used Bikes</a>
-                        <a href="/compare" class="compare-link">⚖ Compare</a>
-                        <a href="/favorites" class="favorites-link">♥ Favorites%s</a>
-                        %s
-                        %s
+                        <a href="/compare">Compare</a>
+                        <a href="/favorites">Favourites%s</a>
                     </nav>
+                    <div class="topbar-actions">
+                        %s
+                    </div>
                 </header>
                 """.formatted(
                 favCount > 0 ? " (" + favCount + ")" : "",
-                adminQuickLink,
                 profileBlock
         );
     }
@@ -1264,15 +1372,27 @@ public final class HtmlRenderer {
                 
         return layout("Car Details", """
                 <header class="topbar">
-                    <a href="/" style="text-decoration:none;"><img src="/logo.png" alt="Autosphere" class="brand-logo"/></a>
-                    <nav><a href="/">Back to Listings</a></nav>
+                    <a href="/" class="brand">
+                        <span class="brand-mark">A</span>
+                        <span>AutoSphere</span>
+                    </a>
+                    <nav>
+                        <a href="/">Home</a>
+                        <a href="/?type=Car">Inventory</a>
+                        <a href="/?type=Bike">Used Bikes</a>
+                        <a href="/compare">Compare</a>
+                        <a href="/favorites">Favourites</a>
+                    </nav>
+                    <div class="topbar-actions">
+                        <a href="/" class="btn-outline">← Back to Listings</a>
+                    </div>
                 </header>
                 %s
-                <section class="panel details-layout">
+                <section class="details-layout">
                     <div class="gallery-section">
                         %s
                     </div>
-                    <div class="info-section">
+                    <div class="info-section panel">
                         <div class="detail-title-row">
                             <h2>%s</h2>
                             %s

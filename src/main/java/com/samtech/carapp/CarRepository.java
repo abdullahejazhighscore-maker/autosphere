@@ -24,6 +24,7 @@ public class CarRepository {
         addLikeFilter(sql, params, "c.color", filters.get("color"));
         addLikeFilter(sql, params, "c.city", filters.get("city"));
         addBodyTypeFilter(sql, params, filters.get("body"));
+        addUsagePreferenceFilter(sql, filters.get("usage"), filters.get("body"));
         addConditionFilter(sql, params, filters.get("condition"));
         addExactFilter(sql, params, "c.transmission", filters.get("transmission"));
         addMinPriceFilter(sql, params, filters.get("minPrice"));
@@ -463,6 +464,25 @@ public class CarRepository {
         params.add(body.trim());
         params.add("%" + body.trim() + "%");
         params.add("%" + body.trim() + "%");
+    }
+
+    /**
+     * Soft heuristic for ?usage=Family|Personal when no explicit body segment is set.
+     * When the wizard supplies both body + usage, segment / budget already dominate — we skip this
+     * so we never contradict the shopper's chosen car type.
+     */
+    private void addUsagePreferenceFilter(StringBuilder sql, String usageRaw, String bodyRaw) {
+        if (usageRaw == null || usageRaw.isBlank()) return;
+        if (bodyRaw != null && !bodyRaw.isBlank()) return;
+
+        String usage = usageRaw.trim();
+        if ("Family".equalsIgnoreCase(usage)) {
+            sql.append("""
+                     AND LOWER(TRIM(COALESCE(c.body, ''))) NOT IN ('coupe', 'convertible', 'sport car')
+                    """);
+        } else if ("Personal".equalsIgnoreCase(usage)) {
+            sql.append(" AND LOWER(TRIM(COALESCE(c.body, ''))) <> 'minivan' ");
+        }
     }
 
     private void addConditionFilter(StringBuilder sql, List<Object> params, String condition) {

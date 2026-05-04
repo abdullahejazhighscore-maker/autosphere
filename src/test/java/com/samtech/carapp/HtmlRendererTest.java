@@ -48,8 +48,8 @@ class HtmlRendererTest {
                 Set.of(1),
                 ""
         );
-        assertTrue(html.contains("Apply filters"));
-        assertTrue(html.contains("Cars for sale"));
+        assertTrue(html.contains("Apply Filters"));
+        assertTrue(html.contains("Latest Listings") || html.contains("Cars for sale"));
         assertTrue(html.contains("Model"));
     }
 
