@@ -79,18 +79,23 @@ public final class FairPriceCalculator {
         public final List<String> reasons;
         public final List<String> warnings;
         /**
-         * True when the calculated fair price differed from the seller's asking price
-         * by more than {@link #FALLBACK_THRESHOLD_PCT}. In that case the displayed
-         * fair / low / high values are overridden to a conservative band a few lacs
-         * below the asking price instead of showing a wildly different number.
+         * True when the raw (unclamped) fair price differed from the seller's asking price
+         * by more than {@link #FALLBACK_THRESHOLD_PCT}. The displayed values are still
+         * clamped to within ±{@link #ESTIMATE_ASKING_BAND_PKR} of the asking price.
          */
         public final boolean fallback;
+        /**
+         * True when the make/model is not in our catalogue; fair value is a fixed gap
+         * of {@link FairPriceCalculator#INDICATIVE_GAP_BELOW_ASKING_PKR} below the seller's price.
+         */
+        public final boolean indicativeOnly;
 
         Estimate(boolean known, String generationLabel,
                  double basePricePkr, double fairPricePkr,
                  double fairLowPkr, double fairHighPkr,
                  double askingPricePkr, double overpricedPct,
                  boolean fallback,
+                 boolean indicativeOnly,
                  List<String> reasons, List<String> warnings) {
             this.known = known;
             this.generationLabel = generationLabel;
@@ -101,6 +106,7 @@ public final class FairPriceCalculator {
             this.askingPricePkr = askingPricePkr;
             this.overpricedPct = overpricedPct;
             this.fallback = fallback;
+            this.indicativeOnly = indicativeOnly;
             this.reasons = reasons;
             this.warnings = warnings;
         }
@@ -108,6 +114,10 @@ public final class FairPriceCalculator {
         /** Verdict shown next to the asking price ("13% above fair price"). */
         public String verdict() {
             if (!known) return "estimate unavailable";
+            if (indicativeOnly) {
+                return String.format(Locale.US, "≈ Rs %.2f Lacs below listed price",
+                        INDICATIVE_GAP_BELOW_ASKING_PKR / 100_000.0);
+            }
             if (fallback) {
                 double diffLacs = (askingPricePkr - fairPricePkr) / 100_000.0;
                 if (diffLacs >= 0.5) {
@@ -126,11 +136,16 @@ public final class FairPriceCalculator {
     /**
      * Threshold above which we consider our detailed calculation unreliable for this
      * specific listing (incomplete catalogue, mis-detected variant, unusual condition,
-     * etc.) and fall back to a conservative "≈ 3 Lacs below asking" display.
+     * etc.). A warning is shown; the estimate is still limited to ±
+     * {@link #ESTIMATE_ASKING_BAND_PKR} of the asking price.
      */
     public static final double FALLBACK_THRESHOLD_PCT = 50.0;
-    /** Conservative gap (PKR) below the seller's asking price used in fallback mode. */
-    public static final double FALLBACK_GAP_PKR = 300_000.0;
+    /** Fair estimate (mid and range) must stay within this distance of the seller's asking price (PKR). */
+    public static final double ESTIMATE_ASKING_BAND_PKR = 300_000.0;
+    /**
+     * When a car make/model is missing from the catalogue, we show fair price as listed price minus this amount (PKR).
+     */
+    public static final double INDICATIVE_GAP_BELOW_ASKING_PKR = 376_000.0;
 
     /* =========== Generation catalogue (2025/26 PKR Lacs, Pakistan market) =========== */
 
@@ -230,7 +245,7 @@ public final class FairPriceCalculator {
 
         Generation gen = findGeneration(car);
         if (gen == null) {
-            return unknownEstimate(car.getPrice(),
+            return catalogMissingIndicativeEstimate(car.getPrice(),
                     "Fair-price database does not yet include this make / model.");
         }
 
@@ -321,21 +336,21 @@ public final class FairPriceCalculator {
             warnings.add("2014 Corolla could be E140 OR E170 — confirm shape code.");
         }
 
-        // Safety net: if our detailed estimate is more than 50% off the seller's
-        // asking price, fall back to a conservative "≈ 3 Lacs below asking" band.
-        boolean fallback = asking > 0 && Math.abs(pct) > FALLBACK_THRESHOLD_PCT;
+        double rawPct = pct;
+        boolean fallback = asking > 0 && Math.abs(rawPct) > FALLBACK_THRESHOLD_PCT;
         if (fallback) {
             warnings.add(0, "Detailed valuation differed sharply from the asking price; "
                     + "showing a conservative estimate instead.");
-            double safeFair = Math.max(50_000.0, asking - FALLBACK_GAP_PKR);
-            fair = safeFair;
-            low  = Math.max(50_000.0, safeFair - 50_000.0);
-            high = safeFair + 50_000.0;
-            pct  = ((asking - fair) / fair) * 100.0;
         }
 
+        double[] banded = clampEstimateNearAsking(asking, fair, low, high);
+        fair = banded[0];
+        low = banded[1];
+        high = banded[2];
+        pct = fair > 0 ? ((asking - fair) / fair) * 100.0 : 0.0;
+
         return new Estimate(true, gen.label, basePrice, fair, low, high,
-                asking, pct, fallback, reasons, warnings);
+                asking, pct, fallback, false, reasons, warnings);
     }
 
     private static double clamp01(double v) {
@@ -344,13 +359,66 @@ public final class FairPriceCalculator {
         return v;
     }
 
+    private static double clamp(double x, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, x));
+    }
+
+    /**
+     * Keeps fair / low / high within ±3 Lacs (see {@link #ESTIMATE_ASKING_BAND_PKR}) of the
+     * seller's asking price so the UI never shows an estimate far from the listing price.
+     */
+    private static double[] clampEstimateNearAsking(double asking, double fair, double low, double high) {
+        if (asking <= 0 || !Double.isFinite(asking)) {
+            return new double[] { fair, low, high };
+        }
+        double bandLo = Math.max(0.0, asking - ESTIMATE_ASKING_BAND_PKR);
+        double bandHi = asking + ESTIMATE_ASKING_BAND_PKR;
+
+        fair = clamp(fair, bandLo, bandHi);
+        low = clamp(low, bandLo, fair);
+        high = clamp(high, fair, bandHi);
+        if (low > fair) {
+            low = bandLo;
+        }
+        if (high < fair) {
+            high = bandHi;
+        }
+        low = clamp(low, bandLo, fair);
+        high = clamp(high, fair, bandHi);
+        return new double[] { fair, low, high };
+    }
+
     /* =========================== Internals =========================== */
 
     private static Estimate unknownEstimate(double asking, String reason) {
         List<String> warn = new ArrayList<>();
         warn.add(reason);
         return new Estimate(false, "Unknown model", 0, 0, 0, 0,
-                asking, 0, false, new ArrayList<>(), warn);
+                asking, 0, false, false, new ArrayList<>(), warn);
+    }
+
+    /**
+     * Shown when we have a car listing price but no generation in the catalogue:
+     * fair = asking − {@link #INDICATIVE_GAP_BELOW_ASKING_PKR} (e.g. 50 Lacs listed → ~46.24 Lacs fair).
+     */
+    private static Estimate catalogMissingIndicativeEstimate(double asking, String catalogReason) {
+        List<String> warnings = new ArrayList<>();
+        warnings.add(catalogReason);
+        if (asking <= 0 || !Double.isFinite(asking)) {
+            return unknownEstimate(asking, catalogReason);
+        }
+        double fair = asking - INDICATIVE_GAP_BELOW_ASKING_PKR;
+        fair = Math.max(fair, 1_000.0);
+        double low = fair * 0.97;
+        double high = fair * 1.03;
+        double pct = ((asking - fair) / fair) * 100.0;
+        List<String> reasons = new ArrayList<>();
+        reasons.add(String.format(Locale.US,
+                "Model not in valuation database — indicative fair price is Rs %.2f Lacs below the listed price.",
+                INDICATIVE_GAP_BELOW_ASKING_PKR / 100_000.0));
+        String label = "Indicative estimate (model not catalogued)";
+        return new Estimate(true, label, asking, fair, low, high, asking, pct,
+                false, true, reasons, warnings);
     }
 
     private static Generation findGeneration(Car car) {
@@ -562,19 +630,21 @@ public final class FairPriceCalculator {
         if (car.getMileage() > 30_000) reasons.add("High-mileage penalty applied");
 
         List<String> warnings = new ArrayList<>();
-        boolean fallback = known && asking > 0 && Math.abs(pct) > FALLBACK_THRESHOLD_PCT;
+        double rawPct = pct;
+        boolean fallback = known && asking > 0 && Math.abs(rawPct) > FALLBACK_THRESHOLD_PCT;
         if (fallback) {
             warnings.add("Detailed valuation differed sharply from the asking price; "
                     + "showing a conservative estimate instead.");
-            double safeFair = Math.max(20_000.0, asking - FALLBACK_GAP_PKR);
-            fair = safeFair;
-            low  = Math.max(20_000.0, safeFair - 25_000.0);
-            high = safeFair + 25_000.0;
-            pct  = ((asking - fair) / fair) * 100.0;
         }
 
+        double[] banded = clampEstimateNearAsking(asking, fair, low, high);
+        fair = banded[0];
+        low = banded[1];
+        high = banded[2];
+        pct = fair > 0 ? ((asking - fair) / fair) * 100.0 : 0.0;
+
         return new Estimate(known, label.trim(), newPricePkr, fair,
-                low, high, asking, pct, fallback,
+                low, high, asking, pct, fallback, false,
                 reasons, warnings);
     }
 }

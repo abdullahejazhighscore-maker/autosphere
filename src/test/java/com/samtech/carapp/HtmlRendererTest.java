@@ -86,6 +86,24 @@ class HtmlRendererTest {
     }
 
     @Test
+    void carDetailsPageShouldShowIndicativeEstimateWhenModelNotInCatalogue() {
+        // e.g. listed at 50 Lacs → indicative fair ≈ 50 − 3.76 = 46.24 Lacs
+        Car car = sampleCar(77, "Rare import", "ACME", "NotInDb", 2020, 5_000_000, 40_000);
+        CarDetails details = new CarDetails(
+                car,
+                new User(2, "seller1", "SELLER", "seller1@example.com", "03001234567"),
+                List.of("/x.jpg")
+        );
+        String html = HtmlRenderer.carDetailsPage(details, null, false, "");
+        assertTrue(html.contains("Indicative estimate"),
+                "Uncatalogued models must show an indicative fair-price badge.");
+        assertTrue(html.contains("below listed price"),
+                "Verdict must state the fixed lac gap below the seller's listed price.");
+        assertTrue(html.contains("46.2") || html.contains("46.24"),
+                "Approximate fair figure (~46.24 Lacs) must appear for a 50 Lac listing.");
+    }
+
+    @Test
     void homePageShouldNotShowFairPriceEstimate() {
         Car car = sampleCar(12, "Toyota Corolla Altis", "Toyota", "Corolla", 2018, 4_200_000, 80_000);
         String html = HtmlRenderer.homePage(

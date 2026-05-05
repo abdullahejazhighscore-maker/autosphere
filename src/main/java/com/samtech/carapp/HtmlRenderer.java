@@ -1032,14 +1032,17 @@ public final class HtmlRenderer {
                     %s
                     <h3>Add New Listing</h3>
                     <form class="grid-form" method="post" action="/seller/cars" enctype="multipart/form-data">
-                        <select name="vehicleType" required>
+                        <select name="vehicleType" id="sellerVehicleType" required onchange="syncSellerVehicleBodyField()">
                             <option value="Car">Car</option>
                             <option value="Bike">Bike</option>
                         </select>
                         <input name="title" placeholder="Listing title" required/>
                         <select name="make" required>%s</select>
                         <input name="model" placeholder="Model" required/>
-                        <select name="body" required>%s</select>
+                        <div id="sellerBodyTypeRow" class="seller-body-type-row">
+                        <select name="body" id="sellerBodySelect" required>%s</select>
+                        </div>
+                        <input type="hidden" id="sellerBodyBikeHidden" name="body" value="" disabled/>
                         <input name="color" placeholder="Color" required/>
                         <input name="city" placeholder="City" required/>
                         <input type="number" name="year" placeholder="Year" min="1900" max="%d" required
@@ -1075,6 +1078,29 @@ public final class HtmlRenderer {
                             var cond = document.getElementById('paintCond').value;
                             document.getElementById('showeredParts').style.display = (cond === 'Some parts showered') ? 'block' : 'none';
                         }
+                        function syncSellerVehicleBodyField() {
+                            var vtEl = document.getElementById('sellerVehicleType');
+                            if (!vtEl) return;
+                            var bike = vtEl.value === 'Bike';
+                            var row = document.getElementById('sellerBodyTypeRow');
+                            var sel = document.getElementById('sellerBodySelect');
+                            var hid = document.getElementById('sellerBodyBikeHidden');
+                            if (!row || !sel || !hid) return;
+                            if (bike) {
+                                row.style.display = 'none';
+                                sel.removeAttribute('required');
+                                sel.disabled = true;
+                                sel.removeAttribute('name');
+                                hid.disabled = false;
+                            } else {
+                                row.style.display = '';
+                                sel.setAttribute('required', 'required');
+                                sel.disabled = false;
+                                sel.setAttribute('name', 'body');
+                                hid.disabled = true;
+                            }
+                        }
+                        document.addEventListener('DOMContentLoaded', syncSellerVehicleBodyField);
                     </script>
                 </section>
                 <section class="panel">
@@ -1477,10 +1503,12 @@ public final class HtmlRenderer {
         }
 
         String deltaClass;
-        if (est.fallback)                deltaClass = "delta-fallback";
+        if (est.fallback || est.indicativeOnly) deltaClass = "delta-fallback";
         else if (est.overpricedPct > 8)  deltaClass = "delta-over";
         else if (est.overpricedPct < -8) deltaClass = "delta-under";
         else                              deltaClass = "delta-fair";
+
+        String fairLabel = est.indicativeOnly ? "Indicative estimate" : "Estimated fair price";
 
         StringBuilder tooltip = new StringBuilder();
         tooltip.append(est.generationLabel).append("\n");
@@ -1498,10 +1526,10 @@ public final class HtmlRenderer {
             for (String w : est.warnings) tooltip.append("• ").append(w).append("\n");
         }
 
-        // In fallback mode show a single conservative figure ("≈ Rs 47 Lacs"),
+        // In fallback / indicative mode show a single conservative figure ("≈ Rs 47 Lacs"),
         // since the detailed range is known to be unreliable for this listing.
         String rangeHtml;
-        if (est.fallback) {
+        if (est.fallback || est.indicativeOnly) {
             rangeHtml = "Rs ≈ " + formatPkrShort(est.fairPricePkr);
         } else {
             rangeHtml = "Rs " + formatPkrShort(est.fairLowPkr)
@@ -1510,13 +1538,14 @@ public final class HtmlRenderer {
 
         return """
                 <span class="fair-estimate %s" title="%s">
-                    <small class="fair-label">Estimated fair price</small>
+                    <small class="fair-label">%s</small>
                     <small class="fair-range">%s</small>
                     <small class="fair-delta">%s</small>
                 </span>
                 """.formatted(
                 deltaClass,
                 escape(tooltip.toString().trim()),
+                escape(fairLabel),
                 escape(rangeHtml),
                 escape(est.verdict())
         );
@@ -1572,14 +1601,17 @@ public final class HtmlRenderer {
                     <h2>Edit Listing</h2>
                     %s
                     <form method="post" action="/seller/cars/%d/edit" class="grid-form" enctype="multipart/form-data">
-                        <select name="vehicleType" required>
+                        <select name="vehicleType" id="sellerVehicleType" required onchange="syncSellerVehicleBodyField()">
                             <option value="Car" %s>Car</option>
                             <option value="Bike" %s>Bike</option>
                         </select>
                         <input name="title" value="%s" required/>
                         <select name="make" required>%s</select>
                         <input name="model" value="%s" required/>
-                        <select name="body" required>%s</select>
+                        <div id="sellerBodyTypeRow" class="seller-body-type-row">
+                        <select name="body" id="sellerBodySelect" required>%s</select>
+                        </div>
+                        <input type="hidden" id="sellerBodyBikeHidden" name="body" value="" disabled/>
                         <input name="color" value="%s" required/>
                         <input name="city" value="%s" required/>
                         <input type="number" name="year" value="%d" min="1900" max="%d" required
@@ -1615,6 +1647,29 @@ public final class HtmlRenderer {
                             var cond = document.getElementById('paintCond').value;
                             document.getElementById('showeredParts').style.display = (cond === 'Some parts showered') ? 'block' : 'none';
                         }
+                        function syncSellerVehicleBodyField() {
+                            var vtEl = document.getElementById('sellerVehicleType');
+                            if (!vtEl) return;
+                            var bike = vtEl.value === 'Bike';
+                            var row = document.getElementById('sellerBodyTypeRow');
+                            var sel = document.getElementById('sellerBodySelect');
+                            var hid = document.getElementById('sellerBodyBikeHidden');
+                            if (!row || !sel || !hid) return;
+                            if (bike) {
+                                row.style.display = 'none';
+                                sel.removeAttribute('required');
+                                sel.disabled = true;
+                                sel.removeAttribute('name');
+                                hid.disabled = false;
+                            } else {
+                                row.style.display = '';
+                                sel.setAttribute('required', 'required');
+                                sel.disabled = false;
+                                sel.setAttribute('name', 'body');
+                                hid.disabled = true;
+                            }
+                        }
+                        document.addEventListener('DOMContentLoaded', syncSellerVehicleBodyField);
                     </script>
                 </section>
                 """.formatted(
